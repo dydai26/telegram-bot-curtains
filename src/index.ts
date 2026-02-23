@@ -336,9 +336,18 @@ bot.on('text', async (ctx) => {
     }
 });
 
+import http from 'http';
+
 bot.launch().then(() => {
     console.log('Bot is running...');
 });
+
+// Add a simple health check server for Render
+const port = process.env.PORT || 3000;
+http.createServer((req, res) => {
+    res.writeHead(200);
+    res.end('Bot is running');
+}).listen(port);
 
 // Enable graceful stop
 process.once('SIGINT', () => bot.stop('SIGINT'));
