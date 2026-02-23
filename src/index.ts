@@ -1,4 +1,5 @@
 import { Telegraf, Context, session, Markup, Telegram } from 'telegraf';
+import http from 'http';
 import dotenv from 'dotenv';
 import * as db from './supabase.js';
 import * as ai from './ai.js';
@@ -335,8 +336,6 @@ bot.on('text', async (ctx) => {
         return ctx.reply('Я поки не розумію цей запит. Спробуйте скористатись меню.');
     }
 });
-
-import http from 'http';
 
 bot.launch().then(() => {
     console.log('Bot is running...');
