@@ -1,0 +1,14 @@
+{
+  "channels": {
+    "telegram": {
+      "enabled": false,
+      "botToken": "8273464133:AAFLleKU97xQrOua_Cyw08h1EHAExdSxzjo",
+      "dmPolicy": "pairing",
+      "groups": {
+        "*": {
+          "requireMention": true
+        }
+      }
+    }
+  }
+}
