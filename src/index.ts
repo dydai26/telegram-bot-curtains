@@ -59,6 +59,11 @@ bot.start(async (ctx) => {
 // Handle Categories
 bot.hears(['🪟 Тюль', '🛋 Штори'], async (ctx) => {
     const categoryName = ctx.message.text.includes('Тюль') ? 'Тюль' : 'Штори';
+    return sendProductsPage(ctx, categoryName, 0);
+});
+
+// Helper function for pagination
+async function sendProductsPage(ctx: MyContext, categoryName: string, page: number) {
     const categories = await db.getCategories();
     const category = categories.find(c => c.name === categoryName);
 
@@ -66,16 +71,21 @@ bot.hears(['🪟 Тюль', '🛋 Штори'], async (ctx) => {
         return ctx.reply('Категорію не знайдено.');
     }
 
-    const products = await db.getProductsByCategory(category.id);
-    if (products.length === 0) {
+    const allProducts = await db.getProductsByCategory(category.id);
+    if (allProducts.length === 0) {
         return ctx.reply('Товарів у цій категорії поки немає.');
     }
+
+    const pageSize = 5;
+    const start = page * pageSize;
+    const end = start + pageSize;
+    const products = allProducts.slice(start, end);
+    const totalPages = Math.ceil(allProducts.length / pageSize);
 
     // Admin info for consultation button
     const adminUsername = (process.env.ADMIN_USERNAME || 'dydai87').replace('@', '');
 
     for (const product of products) {
-        // Find article if it's in the name e.g. "Тюль (Арт. 9.1)"
         const articleDisplay = product.name.includes('Арт.') 
             ? product.name 
             : `${product.name} (Арт. ${product.id.slice(0, 4)})`;
@@ -84,7 +94,6 @@ bot.hears(['🪟 Тюль', '🛋 Штори'], async (ctx) => {
                         `📝 ${product.description}\n\n` +
                         `💰 *Ціна: ${product.price_per_meter} грн/м*`;
         
-        // Preparation for consultation link
         const textMsg = `Доброго дня! Маю запитання щодо ${articleDisplay}.`;
         const consultationUrl = `https://t.me/${adminUsername}?text=${encodeURIComponent(textMsg)}`;
         
@@ -105,21 +114,38 @@ bot.hears(['🪟 Тюль', '🛋 Штори'], async (ctx) => {
         }
     }
 
-    // Final prompt for consultation
-    const isTulle = categoryName === 'Тюль';
-    const finalMsg = isTulle 
-        ? 'Не знайшли що шукали? 🧐\nЗадайте запитання мені напряму!'
-        : 'Маєте додаткові запитання по шторах? 😊\nПишіть мені!';
-    
-    const textMsg = isTulle 
-        ? 'Доброго дня! Маю запитання конкретно по тюлі.' 
-        : 'Доброго дня! Маю запитання щодо штор.';
-    
-    const url = `https://t.me/${adminUsername.replace('@', '')}?text=${encodeURIComponent(textMsg)}`;
+    // Pagination buttons and final prompt
+    const paginationButtons = [];
+    if (page > 0) {
+        paginationButtons.push(Markup.button.callback('⬅️ Попередня', `page_${categoryName}_${page - 1}`));
+    }
+    if (end < allProducts.length) {
+        paginationButtons.push(Markup.button.callback('Наступна ➡️', `page_${categoryName}_${page + 1}`));
+    }
 
-    return ctx.reply(finalMsg, Markup.inlineKeyboard([
-        [Markup.button.url('📲 Зв\'язатись з менеджером', url)]
-    ]));
+    const isTulle = categoryName === 'Тюль';
+    const finalMsg = `Сторінка ${page + 1} з ${totalPages}.` + 
+        (isTulle ? '\n\nНе знайшли що шукали? 🧐 Задайте запитання мені напряму!' : '\n\nМаєте додаткові запитання по шторах? 😊 Пишіть мені!');
+    
+    const textMsg = isTulle ? 'Доброго дня! Маю запитання конкретно по тюлі.' : 'Доброго дня! Маю запитання щодо штор.';
+    const url = `https://t.me/${adminUsername}?text=${encodeURIComponent(textMsg)}`;
+
+    const extraButtons = [Markup.button.url('📲 Зв\'язатись з менеджером', url)];
+    
+    // Final reply with cumulative buttons
+    const keyboard = [];
+    if (paginationButtons.length > 0) keyboard.push(paginationButtons);
+    keyboard.push(extraButtons);
+
+    return ctx.reply(finalMsg, Markup.inlineKeyboard(keyboard));
+}
+
+// Pagination handler
+bot.action(/^page_(.+)_(.+)$/, async (ctx) => {
+    const categoryName = ctx.match[1];
+    const page = parseInt(ctx.match[2]);
+    await ctx.answerCbQuery();
+    return sendProductsPage(ctx, categoryName, page);
 });
 
 // Calculation Start
