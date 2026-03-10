@@ -71,10 +71,26 @@ bot.hears(['🪟 Тюль', '🛋 Штори'], async (ctx) => {
         return ctx.reply('Товарів у цій категорії поки немає.');
     }
 
+    // Admin info for consultation button
+    const adminUsername = (process.env.ADMIN_USERNAME || 'dydai87').replace('@', '');
+
     for (const product of products) {
-        const message = `*${product.name}*\n\n${product.description}\n\nЦіна: ${product.price_per_meter} грн/м`;
+        // Find article if it's in the name e.g. "Тюль (Арт. 9.1)"
+        const articleDisplay = product.name.includes('Арт.') 
+            ? product.name 
+            : `${product.name} (Арт. ${product.id.slice(0, 4)})`;
+
+        const message = `✨ *${articleDisplay}*\n\n` +
+                        `📝 ${product.description}\n\n` +
+                        `💰 *Ціна: ${product.price_per_meter} грн/м*`;
+        
+        // Preparation for consultation link
+        const textMsg = `Доброго дня! Маю запитання щодо ${articleDisplay}.`;
+        const consultationUrl = `https://t.me/${adminUsername}?text=${encodeURIComponent(textMsg)}`;
+        
         const buttons = Markup.inlineKeyboard([
-            [Markup.button.callback('Розрахувати вартість 📏', `calc_${product.id}`)]
+            [Markup.button.callback('Розрахувати вартість 📏', `calc_${product.id}`)],
+            [Markup.button.url('📲 Консультація', consultationUrl)]
         ]);
 
         try {
@@ -88,6 +104,22 @@ bot.hears(['🪟 Тюль', '🛋 Штори'], async (ctx) => {
             await ctx.reply(message, { parse_mode: 'Markdown', ...buttons });
         }
     }
+
+    // Final prompt for consultation
+    const isTulle = categoryName === 'Тюль';
+    const finalMsg = isTulle 
+        ? 'Не знайшли що шукали? 🧐\nЗадайте запитання мені напряму!'
+        : 'Маєте додаткові запитання по шторах? 😊\nПишіть мені!';
+    
+    const textMsg = isTulle 
+        ? 'Доброго дня! Маю запитання конкретно по тюлі.' 
+        : 'Доброго дня! Маю запитання щодо штор.';
+    
+    const url = `https://t.me/${adminUsername.replace('@', '')}?text=${encodeURIComponent(textMsg)}`;
+
+    return ctx.reply(finalMsg, Markup.inlineKeyboard([
+        [Markup.button.url('📲 Зв\'язатись з менеджером', url)]
+    ]));
 });
 
 // Calculation Start
