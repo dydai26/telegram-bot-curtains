@@ -4,11 +4,13 @@ import dotenv from 'dotenv';
 import * as db from './supabase.js';
 import * as ai from './ai.js';
 
+console.log('Starting initialization...');
 dotenv.config();
 
 const botToken = process.env.BOT_TOKEN || '';
 const notifyToken = process.env.NOTIFY_BOT_TOKEN;
 
+console.log('Checking BOT_TOKEN...');
 if (!botToken) {
     console.error('BOT_TOKEN is missing in .env');
     process.exit(1);
@@ -29,6 +31,7 @@ interface MyContext extends Context {
     session: MySession;
 }
 
+console.log('Initializing bot...');
 const bot = new Telegraf<MyContext>(botToken);
 const notifyBot = notifyToken ? new Telegram(notifyToken) : bot.telegram;
 
@@ -40,6 +43,7 @@ bot.use((ctx, next) => {
     return next();
 });
 
+console.log('Setting up commands...');
 // /start command
 bot.start(async (ctx) => {
     await db.syncUser(ctx.from);
@@ -337,16 +341,25 @@ bot.on('text', async (ctx) => {
     }
 });
 
-bot.launch().then(() => {
-    console.log('Bot is running...');
-});
+export { bot };
 
-// Add a simple health check server for Render
-const port = process.env.PORT || 3000;
-http.createServer((req, res) => {
-    res.writeHead(200);
-    res.end('Bot is running');
-}).listen(port);
+if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+    console.log('Launching bot in polling mode...');
+    bot.launch({ dropPendingUpdates: true }).then(() => {
+        console.log('✅ Bot is running and connected to Telegram (Polling)');
+    }).catch(err => {
+        console.error('❌ Failed to launch bot:', err);
+    });
+
+    // Simple health check server for local/Render
+    const port = process.env.PORT || 3000;
+    http.createServer((req, res) => {
+        res.writeHead(200);
+        res.end('Bot is running');
+    }).listen(port, () => {
+        console.log(`📡 Health check server is running on port ${port}`);
+    });
+}
 
 // Enable graceful stop
 process.once('SIGINT', () => bot.stop('SIGINT'));

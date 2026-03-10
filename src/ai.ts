@@ -14,7 +14,7 @@ export async function getAiConsultation(userMessage: string, history: any[] = []
             const response = await axios.post(`${OPENCLAW_URL}/chat`, {
                 message: userMessage,
                 history: history
-            }, { timeout: 5000 }); // Add timeout to not hang
+            }, { timeout: 3000 }); // Add timeout to not hang
             
             if (response.data && response.data.reply) {
                 return response.data.reply;
