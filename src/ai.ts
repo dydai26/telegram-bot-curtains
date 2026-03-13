@@ -16,12 +16,24 @@ export async function getAiConsultation(userMessage: string, history: any[] = []
                 history: history
             }, { timeout: 3000 }); // Add timeout to not hang
             
-            if (response.data && response.data.reply) {
-                return response.data.reply;
-            }
         } catch (error: any) {
-            console.warn('OpenClaw fallback trigger:', error.message);
-            // If it's a connection error and we have OpenAI, we'll continue to OpenAI
+            console.warn('OpenClaw /chat failed:', error.message);
+            
+            // If /chat failed with 405, try OpenAI-compatible endpoint
+            if (error.response && error.response.status === 405) {
+                try {
+                    console.log('Trying OpenClaw OpenAI-compatible endpoint...');
+                    const aiResponse = await axios.post(`${OPENCLAW_URL}/v1/chat/completions`, {
+                        model: 'gpt-3.5-turbo',
+                        messages: [{ role: 'user', content: userMessage }]
+                    }, { timeout: 5000 });
+                    if (aiResponse.data && aiResponse.data.choices) {
+                        return aiResponse.data.choices[0].message.content;
+                    }
+                } catch (innerError: any) {
+                    console.warn('OpenClaw OpenAI-compatible endpoint also failed:', innerError.message);
+                }
+            }
         }
     }
 

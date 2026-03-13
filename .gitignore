@@ -3,3 +3,7 @@ node_modules
 dist
 .DS_Store
 *.log
+test_*.js
+check_*.js
+create_sessions_table.js
+wait_for_bot.js

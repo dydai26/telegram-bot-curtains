@@ -42,3 +42,31 @@ export async function syncUser(user: any) {
     });
     if (error) console.error('Error syncing user:', error);
 }
+
+export async function getSession(chatId: number) {
+    const { data, error } = await supabase
+        .from('bot_sessions')
+        .select('session')
+        .eq('id', chatId)
+        .single();
+    
+    if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
+        console.error('Error fetching session:', error.message);
+        return null;
+    }
+    return data?.session || null;
+}
+
+export async function saveSession(chatId: number, session: any) {
+    const { error } = await supabase
+        .from('bot_sessions')
+        .upsert({
+            id: chatId,
+            session: session,
+            updated_at: new Date().toISOString()
+        });
+    
+    if (error) {
+        console.error('Error saving session:', error.message);
+    }
+}

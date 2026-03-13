@@ -35,25 +35,49 @@ console.log('Initializing bot...');
 const bot = new Telegraf<MyContext>(botToken);
 const notifyBot = notifyToken ? new Telegram(notifyToken) : bot.telegram;
 
-bot.use(session());
-
-// Initialize session if not exists
-bot.use((ctx, next) => {
-    ctx.session = ctx.session || {};
-    return next();
+// Persistent session middleware for Vercel/Serverless
+bot.use(async (ctx, next) => {
+    if (!ctx.from) return next();
+    
+    const chatId = ctx.from.id;
+    try {
+        const dbSession = await db.getSession(chatId);
+        ctx.session = dbSession || {};
+        console.log(`Session loaded for ${chatId}`);
+    } catch (e) {
+        console.warn(`Could not load session for ${chatId}, using empty:`, e);
+        ctx.session = {};
+    }
+    
+    await next();
+    
+    try {
+        await db.saveSession(chatId, ctx.session);
+    } catch (e) {
+        console.error(`Could not save session for ${chatId}:`, e);
+    }
 });
 
 console.log('Setting up commands...');
 // /start command
 bot.start(async (ctx) => {
-    await db.syncUser(ctx.from);
-    return ctx.reply(
+    console.log(`Received /start from ${ctx.from.id} (@${ctx.from.username})`);
+    try {
+        await db.syncUser(ctx.from);
+        console.log('User synced in /start');
+    } catch (err) {
+        console.error('Error syncing user in /start:', err);
+    }
+    
+    const result = await ctx.reply(
         'Вітаємо у магазині тюлей та штор! 🪟\nОберіть розділ:',
         Markup.keyboard([
             ['🪟 Тюль', '🛋 Штори'],
             ['📏 Калькулятор', '📦 Мої замовлення']
         ]).resize()
     );
+    console.log('Reply sent successfully:', result.message_id);
+    return result;
 });
 
 // Handle Categories
@@ -203,6 +227,14 @@ bot.action('order_cancel', (ctx) => {
 bot.on('text', async (ctx) => {
     const text = ctx.message.text;
     const session = ctx.session;
+    
+    console.log(`Received text: "${text}" from ${ctx.from.id}. State: ${session.state}`);
+
+    // Skip commands in text handler
+    if (text.startsWith('/')) {
+        console.log(`Skipping text handler for command: ${text}`);
+        return;
+    }
 
     if (session.state === 'awaiting_width') {
         const width = parseFloat(text.replace(',', '.'));
@@ -399,6 +431,12 @@ bot.on('text', async (ctx) => {
     }
 });
 
+// Global Error Handler
+bot.catch((err: any, ctx) => {
+    console.error(`Ooops, encountered an error for ${ctx.updateType}`, err);
+    ctx.reply('Сталася помилка. Спробуйте пізніше.');
+});
+
 export { bot };
 
 if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
@@ -406,15 +444,29 @@ if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
     bot.launch({ dropPendingUpdates: true }).then(() => {
         console.log('✅ Bot is running and connected to Telegram (Polling)');
     }).catch(err => {
-        console.error('❌ Failed to launch bot:', err);
+        if (err.message.includes('409: Conflict: terminated by other getUpdates request')) {
+            console.warn('⚠️ Conflict: Another bot instance is already polling. This instance will not receive updates.');
+        } else {
+            console.error('❌ Failed to launch bot:', err);
+        }
     });
 
     // Simple health check server for local/Render
     const port = process.env.PORT || 3000;
-    http.createServer((req, res) => {
+    const server = http.createServer((req, res) => {
         res.writeHead(200);
         res.end('Bot is running');
-    }).listen(port, () => {
+    });
+
+    server.on('error', (e: any) => {
+        if (e.code === 'EADDRINUSE') {
+            console.log(`📡 Health check: port ${port} busy, skipping server start (already running?)`);
+        } else {
+            console.error('📡 Health check server error:', e);
+        }
+    });
+
+    server.listen(port, () => {
         console.log(`📡 Health check server is running on port ${port}`);
     });
 }
